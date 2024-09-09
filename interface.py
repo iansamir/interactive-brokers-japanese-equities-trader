@@ -34,13 +34,13 @@ frame.pack(padx=10, pady=10)
 tk.Label(frame, text="Longs CSV:").grid(row=0, column=0, padx=5, pady=5)
 longs_text = scrolledtext.ScrolledText(frame, width=50, height=10)
 longs_text.grid(row=1, column=0, padx=5, pady=5)
-longs_text.insert(tk.END, load_csv('longs.csv'))  # Load longs.csv content
+longs_text.insert(tk.END, load_csv('signals/longs.csv'))  # Load longs.csv content
 
 # Display for shorts.csv
 tk.Label(frame, text="Shorts CSV:").grid(row=0, column=1, padx=5, pady=5)
 shorts_text = scrolledtext.ScrolledText(frame, width=50, height=10)
 shorts_text.grid(row=1, column=1, padx=5, pady=5)
-shorts_text.insert(tk.END, load_csv('shorts.csv'))  # Load shorts.csv content
+shorts_text.insert(tk.END, load_csv('signals/shorts.csv'))  # Load shorts.csv content
 
 # Button to execute trades
 execute_button = tk.Button(frame, text="Execute Trades", command=execute_trades)
