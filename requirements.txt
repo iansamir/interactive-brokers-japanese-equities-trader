@@ -1,0 +1,5 @@
+paramiko 
+pandas 
+ib_insync
+tkinter 
+colorama
