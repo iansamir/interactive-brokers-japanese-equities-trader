@@ -23,9 +23,6 @@ def generate_returns(signals_file="japan_signals.csv", returns_file="all-japan-t
                      return_threshold_window=20, long_return_threshold=-100, short_return_threshold=-100, 
                      long_leverage=1, short_leverage=1):
     
-    
-    print(long_return_threshold)
-    print(short_return_threshold)
     result = pd.read_csv(signals_file)
     result = result[['Date', 'Ticker', 'Return', 'net_sentiment', 'rank', 'quintiles']]
 
@@ -98,6 +95,28 @@ def generate_returns(signals_file="japan_signals.csv", returns_file="all-japan-t
     # Print the number of rows after filtering
     print('Filtered longs by returns:', len(filtered_longs_with_returns))
     print('Filtered shorts by returns:', len(filtered_shorts_with_returns))
+
+    # Count the number of longs and shorts for each date
+    long_counts = filtered_longs_with_returns.groupby(filtered_longs_with_returns.index).size()
+    short_counts = filtered_shorts_with_returns.groupby(filtered_shorts_with_returns.index).size()
+
+    # Calculate the allocation for longs and shorts (1 / number of longs or shorts)
+    long_allocations = 1 / long_counts
+    short_allocations = 1 / short_counts
+
+    # Combine into a DataFrame with Date as the index
+    allocation_df = pd.DataFrame({
+        'Long Allocation': long_allocations,
+        'Short Allocation': short_allocations
+    })
+
+    # Fill NaN values with 0 where there are no longs or shorts
+    allocation_df.fillna(0, inplace=True)
+
+    # Save the allocation DataFrame to a CSV file
+    allocation_df.to_csv("allocation_per_day.csv")
+
+    print("Allocation DataFrame saved to allocation_per_day.csv")
 
     filtered_longs_returns = filtered_longs_with_returns.groupby(filtered_longs_with_returns.index)['Return'].mean()
     filtered_shorts_returns = filtered_shorts_with_returns.groupby(filtered_shorts_with_returns.index)['Return'].mean()
