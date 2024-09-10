@@ -1,7 +1,7 @@
 import pandas as pd
 import yfinance as yf
 import backtest_config
-from plot import plot_cumulative_returns
+from plot import calculate_statistics, plot_cumulative_returns
 
 def generate_returns(signals_file="japan_signals.csv"):
     result = pd.read_csv(signals_file)
@@ -15,11 +15,9 @@ def generate_returns(signals_file="japan_signals.csv"):
     print('Raw Results')
     print(result.head())
 
-    # Define start and end dates from strategy configuration
+    # Start and End Dates
     start_date = pd.to_datetime(backtest_config.start_date)
     end_date = pd.to_datetime(backtest_config.end_date)
-
-    # Filter results to the specified date range
     result = result[(result.index >= start_date) & (result.index <= end_date)]
 
     print('Date Filtered Results')
@@ -28,9 +26,6 @@ def generate_returns(signals_file="japan_signals.csv"):
     # Get Q1 for longs and Q5 for shorts
     longs = result[result['quintiles'] == 1]
     shorts = result[result['quintiles'] == 5]
-
-    print(longs)
-    print(shorts)
     
     longs.to_csv('unfiltered_longs.csv')
     shorts.to_csv('unfiltered_shorts.csv')
@@ -74,6 +69,7 @@ def generate_returns(signals_file="japan_signals.csv"):
     # Fill NaN values with 0 for daily returns
     strategy_returns['Daily Return'].fillna(0, inplace=True)
     strategy_returns.sort_index(inplace=True)
+    strategy_returns['Cumulative Return'] = (1 + strategy_returns['Daily Return']).cumprod()
 
     strategy_returns["Date"] = strategy_returns.index 
 
@@ -84,13 +80,24 @@ def get_benchmark(start_date, end_date):
     benchmark_data = yf.download("^N225", start=start_date, end=end_date)
     # Compute daily returns from the benchmark's 'Adj Close' prices
     benchmark_data['Daily Return'] = benchmark_data['Adj Close'].pct_change()
-    benchmark_data = benchmark_data.reset_index()[['Date', 'Daily Return']] 
+    benchmark_data['Cumulative Return'] = (1 + benchmark_data['Daily Return']).cumprod()
     return benchmark_data
 
 if __name__ == "__main__":
     returns_df = generate_returns()
-    if pd.Timestamp("2024-07-29") in returns_df.index:
+    # Remove reverse stock split error day 
+    if pd.Timestamp("2024-07-29") in returns_df.index: 
         returns_df.loc["2024-07-29", "Daily Return"] = 0    
-    
     benchmark_df = get_benchmark(start_date=returns_df.index.min(), end_date=returns_df.index.max()) 
-    plot_cumulative_returns(returns_df, benchmark_df)
+    
+    # Calculate statistics
+    strategy_stats = calculate_statistics(returns_df['Cumulative Return'], returns_df['Daily Return'])
+    benchmark_stats = calculate_statistics(benchmark_df['Cumulative Return'], benchmark_df['Daily Return'])
+
+    # Plot cumulative returns with statistics and additional details
+    plot_cumulative_returns(
+        returns_df['Cumulative Return'], 
+        benchmark_df['Cumulative Return'], 
+        strategy_stats, 
+        benchmark_stats
+    )
