@@ -85,9 +85,12 @@ def get_benchmark(start_date, end_date):
 
 if __name__ == "__main__":
     returns_df = generate_returns()
+    returns_df.to_csv("returns_df_inspect.csv")
     # Remove reverse stock split error day 
-    if pd.Timestamp("2024-07-29") in returns_df.index: 
-        returns_df.loc["2024-07-29", "Daily Return"] = 0    
+    if pd.Timestamp("2024-07-29") in returns_df["Date"].values:
+        print("Reverse stock split found!")
+        returns_df.loc[returns_df["Date"] == pd.Timestamp("2024-07-29"), "Daily Return"] = 0
+        returns_df["Cumulative Return"] = (1 + returns_df['Daily Return']).cumprod()
     benchmark_df = get_benchmark(start_date=returns_df.index.min(), end_date=returns_df.index.max()) 
     
     # Calculate statistics
