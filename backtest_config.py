@@ -5,14 +5,15 @@
 start_date = "2018-01-01"
 end_date = "2024-08-01"
 
-top_n_signals = 30 # n longs and n shorts each day
+top_n_signals = 1000 # n longs and n shorts each day
 
 long_sentiment_threshold = -100
 short_sentiment_threshold = 100
 
 long_leverage = 1.0
 short_leverage = 1.0 
+max_alloc = 0.05 # most allocation in a single asset per day 
 
 return_threshold_window = 20 # trading days 
-long_return_threshold = -0.01
+long_return_threshold = 0.00
 short_return_threshold = 100

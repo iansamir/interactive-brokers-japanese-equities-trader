@@ -96,31 +96,38 @@ def generate_returns(signals_file="japan_signals.csv", returns_file="all-japan-t
     print('Filtered longs by returns:', len(filtered_longs_with_returns))
     print('Filtered shorts by returns:', len(filtered_shorts_with_returns))
 
+    max_alloc = backtest_config.max_alloc
+
     # Count the number of longs and shorts for each date
     long_counts = filtered_longs_with_returns.groupby(filtered_longs_with_returns.index).size()
     short_counts = filtered_shorts_with_returns.groupby(filtered_shorts_with_returns.index).size()
 
-    # Calculate the allocation for longs and shorts (1 / number of longs or shorts)
-    long_allocations = 1 / long_counts
-    short_allocations = 1 / short_counts
+    # Print the means of daily long and short counts
+    mean_long_counts = long_counts.mean()
+    mean_short_counts = short_counts.mean()
 
-    # Combine into a DataFrame with Date as the index
-    allocation_df = pd.DataFrame({
-        'Long Allocation': long_allocations,
-        'Short Allocation': short_allocations
-    })
+    print(f"Mean daily long count: {mean_long_counts}")
+    print(f"Mean daily short count: {mean_short_counts}")
 
-    # Fill NaN values with 0 where there are no longs or shorts
-    allocation_df.fillna(0, inplace=True)
+    # Calculate the allocation for longs and shorts: either 1 / count or max_alloc (whichever is smaller)
+    long_allocations = long_counts.apply(lambda x: min(max_alloc, 1 / x))
+    short_allocations = short_counts.apply(lambda x: min(max_alloc, 1 / x))
 
-    # Save the allocation DataFrame to a CSV file
-    allocation_df.to_csv("allocation_per_day.csv")
+    # Print allocation means
+    print(f"Mean daily long allocation: {long_allocations.mean()}")
+    print(f"Mean daily short allocation: {short_allocations.mean()}")
 
-    print("Allocation DataFrame saved to allocation_per_day.csv")
+    # Apply allocations to returns when computing filtered_longs_returns and filtered_shorts_returns
+    filtered_longs_with_returns['allocation'] = filtered_longs_with_returns.index.map(long_allocations)
+    filtered_shorts_with_returns['allocation'] = filtered_shorts_with_returns.index.map(short_allocations)
 
-    filtered_longs_returns = filtered_longs_with_returns.groupby(filtered_longs_with_returns.index)['Return'].mean()
-    filtered_shorts_returns = filtered_shorts_with_returns.groupby(filtered_shorts_with_returns.index)['Return'].mean()
+    # Calculate the mean returns and apply the allocation
+    filtered_longs_returns = filtered_longs_with_returns.groupby(filtered_longs_with_returns.index).apply(
+        lambda g: (g['Return'] * g['allocation']).sum())
+    filtered_shorts_returns = filtered_shorts_with_returns.groupby(filtered_shorts_with_returns.index).apply(
+        lambda g: (g['Return'] * g['allocation']).sum())
 
+    # Create a DataFrame to store the strategy returns
     strategy_returns = pd.DataFrame(index=result.index.unique())
     strategy_returns = strategy_returns.join(filtered_longs_returns.rename('filtered_return_q1'), how='left')
     strategy_returns = strategy_returns.join(filtered_shorts_returns.rename('filtered_return_q5'), how='left')
@@ -136,7 +143,17 @@ def generate_returns(signals_file="japan_signals.csv", returns_file="all-japan-t
     strategy_returns.sort_index(inplace=True)
     strategy_returns['Cumulative Return'] = (1 + strategy_returns['Daily Return']).cumprod()
 
-    strategy_returns["Date"] = strategy_returns.index 
+    strategy_returns["Date"] = strategy_returns.index
+
+    # Save allocations and returns to CSV for inspection
+    allocation_df = pd.DataFrame({
+        'Long Allocation': long_allocations,
+        'Short Allocation': short_allocations
+    })
+    allocation_df.to_csv("allocation_per_day.csv")
+    strategy_returns.to_csv("strategy_returns.csv")
+
+    print("Allocation and strategy returns saved to CSV.")
 
     return strategy_returns 
 
