@@ -150,47 +150,55 @@ def display_positions_as_dataframe(positions):
         print(Fore.YELLOW + "No positions found.")
         return None
 
-def confirm_and_close_positions(exchange_filter=None):
+def display_and_confirm_positions():
     """
-    Display positions and ask for confirmation before closing.
+    Display all positions first, then ask for the exchange filter and confirmation before closing.
     """
     positions = ib.positions()
-    
+
     if not positions:
         print(Fore.YELLOW + "No positions found.")
         return
 
-    # Display positions as a DataFrame
-    df = display_positions_as_dataframe(positions)
+    # Display all positions as a DataFrame
+    print(Fore.CYAN + "Displaying all current positions:")
+    df_all_positions = display_positions_as_dataframe(positions)
+    print(df_all_positions)
 
-    if df is not None:
-        confirm = input(Fore.CYAN + f"Do you want to proceed with closing the {exchange_filter if exchange_filter else ''} positions? (yes/no): ").lower()
+    # Ask user for exchange filter
+    exchange_filter = input(Fore.CYAN + "Enter the exchange filter (e.g., 'TSEJ' for Tokyo Stock Exchange, or press Enter to skip filtering): ").strip()
 
-        if confirm == 'yes':
-            for position in positions:
-                contract = position.contract
-                if exchange_filter:
-                    if contract.secType == 'STK' and contract.exchange == exchange_filter:
-                        action = 'SELL' if position.position > 0 else 'BUY'
-                        order = MarketOrder(action, abs(position.position))
-                        trade = ib.placeOrder(contract, order)
-                        trade.filledEvent += lambda trade, fill: print(f"{Fore.GREEN}Closed position for {fill.contract.symbol} of {fill.shares} shares.")
-                        print(f"{Fore.GREEN}Closing {action} order placed for {contract.symbol}, {abs(position.position)} shares.")
-                        ib.sleep(1)  # Sleep to avoid rate limit
-                    else:
-                        print(f"{Fore.YELLOW}Skipping position: {contract.symbol} on {contract.exchange} (does not match filter)")
-                else:
-                    if contract.secType == 'STK':
-                        action = 'SELL' if position.position > 0 else 'BUY'
-                        order = MarketOrder(action, abs(position.position))
-                        trade = ib.placeOrder(contract, order)
-                        trade.filledEvent += lambda trade, fill: print(f"{Fore.GREEN}Closed position for {fill.contract.symbol} of {fill.shares} shares.")
-                        print(f"{Fore.GREEN}Closing {action} order placed for {contract.symbol}, {abs(position.position)} shares.")
-                        ib.sleep(1)  # Sleep to avoid rate limit
-        else:
-            print(Fore.RED + "Aborting position closure.")
+    # Filter positions based on the exchange filter, if provided
+    filtered_positions = []
+    if exchange_filter:
+        for position in positions:
+            contract = position.contract
+            if contract.exchange == exchange_filter:
+                filtered_positions.append(position)
+        print(Fore.CYAN + f"Displaying positions filtered by exchange: {exchange_filter}")
+        df_filtered_positions = display_positions_as_dataframe(filtered_positions)
+        print(df_filtered_positions)
     else:
-        print(Fore.RED + "No positions to close.")
+        filtered_positions = positions
+
+    if not filtered_positions:
+        print(Fore.YELLOW + f"No positions found for exchange filter: {exchange_filter}")
+        return
+
+    # Ask for confirmation before closing positions
+    confirm = input(Fore.CYAN + f"Do you want to proceed with closing the filtered positions? (yes/no): ").lower()
+
+    if confirm == 'yes':
+        for position in filtered_positions:
+            contract = position.contract
+            action = 'SELL' if position.position > 0 else 'BUY'
+            order = MarketOrder(action, abs(position.position))
+            trade = ib.placeOrder(contract, order)
+            trade.filledEvent += lambda trade, fill: print(f"{Fore.GREEN}Closed position for {fill.contract.symbol} of {fill.shares} shares.")
+            print(f"{Fore.GREEN}Closing {action} order placed for {contract.symbol}, {abs(position.position)} shares.")
+            ib.sleep(1)  # Sleep to avoid rate limit
+    else:
+        print(Fore.RED + "Aborting position closure.")
 
 if __name__ == "__main__":
     try:
@@ -198,15 +206,19 @@ if __name__ == "__main__":
             print(Fore.RED + "Failed to connect to Interactive Brokers. Please check your connection settings.")
             exit()
 
-        confirm_and_close_positions(exchange_filter="TSEJ")
+        # Display positions, ask for exchange filter, and confirm before closing
+        display_and_confirm_positions()
 
+        # Read CSV files for long and short trades
         longs = read_csv('signals/longs.csv')
         shorts = read_csv('signals/shorts.csv')
 
+        # Confirm and place long orders
         if longs:
             print(Fore.CYAN + "Placing long limit orders...")
             confirm_and_place_orders(longs, 'BUY')
 
+        # Confirm and place short orders
         if shorts:
             print(Fore.CYAN + "Placing short limit orders...")
             confirm_and_place_orders(shorts, 'SELL')
