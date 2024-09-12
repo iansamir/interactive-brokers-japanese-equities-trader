@@ -1,4 +1,4 @@
-ticker,quantity
-7203,100
-6758,100
-8035,100
+ticker,limit_price,amount
+AAPL,150,10000
+GOOGL,2700,5000
+TSLA,700,2000

@@ -1,4 +1,4 @@
-ticker,quantity
-9984,100
-7267,100
-6954,100
+ticker,limit_price,amount
+NVDA,150,10000
+C,2700,5000
+GE,700,2000
