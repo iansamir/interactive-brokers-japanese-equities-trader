@@ -12,8 +12,11 @@ short_sentiment_threshold = 100
 
 long_leverage = 1.0
 short_leverage = 1.0 
-max_alloc = 0.05 # most allocation in a single asset per day 
+max_alloc = 0.10 # most allocation in a single asset per day 
 
 return_threshold_window = 20 # trading days 
 long_return_threshold = 0.00
 short_return_threshold = 100
+
+commission_cost = 0.08 # commission % per trade  
+slippage = 0 # 

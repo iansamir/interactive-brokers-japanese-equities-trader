@@ -12,7 +12,7 @@ def run_param_test(param1, param2, range1, range2, optimization_metric="Calmar R
 
     for val1 in range1:
         for val2 in range2:
-            val1 = round(val1, 3)
+            val1 = int(val1)
             val2 = round(val2, 4)
             
             print(f"testing {param1}: {val1} and {param2}: {val2}...")
@@ -43,7 +43,7 @@ def plot_heatmap(results_df, param1, param2, optimization_metric="Calmar Ratio")
 
 if __name__ == "__main__":
     """
-    params to try: 
+    PARAMS 
 
     top_n_signals
     long_sentiment_threshold
@@ -55,8 +55,10 @@ if __name__ == "__main__":
     short_return_threshold
 
     """
-    param1_range = np.linspace(1.0, 2.0, 10)  # start, end, increment 
-    param2_range = np.linspace(0.001, 0.0025, 10) 
-    param1 = "long_leverage" 
-    param2 = "long_sentiment_threshold"
-    run_param_test(param1, param2, param1_range, param2_range)
+    param1_range = np.linspace(20, 100, 4)  # start, end, increment 
+    param2_range = np.linspace(-100, 1, 1) 
+    param1 = "return_threshold_window" 
+    param2 = "long_return_threshold"
+    optimization_metric = "Calmar Ratio"
+    
+    run_param_test(param1, param2, param1_range, param2_range, optimization_metric)
