@@ -2,11 +2,13 @@ from ib_insync import *
 import pandas as pd
 from colorama import Fore, init
 import math
+import yfinance as yf 
+import warnings 
 
-# Initialize colorama
+# # Initialize colorama
 init(autoreset=True)
-
-# Initialize IB connection
+warnings.filterwarnings("ignore")
+# # Initialize IB connection
 ib = IB()
 ib.connect('127.0.0.1', 7497, clientId=1)  # Adjust port and clientId as needed
 
@@ -83,20 +85,94 @@ def place_fixed_share_orders(tickers, action):
         except Exception as e:
             print(Fore.RED + f"Failed to place order for {symbol}. Error: {e}")
 
-def display_and_confirm_orders(tickers, action):
-    """
-    Display the proposed orders and ask for confirmation before placing them.
-    """
+def fetch_realtime_prices(tickers):
+    yahoo_tickers = [f"{ticker}.T" for ticker in tickers]
+    prices = {}
+    for ticker in yahoo_tickers:
+        try:
+            data = yf.Ticker(ticker).history(period="1d")
+            clean_ticker = ticker.replace(".T", "")
+            if not data.empty:
+                prices[clean_ticker] = data['Close'].iloc[-1]
+            else:
+                prices[clean_ticker] = None
+                print(f"Warning: No price data available for {ticker}")
+        except Exception as e:
+            print(f"Error fetching data for {ticker}: {e}")
+            prices[clean_ticker] = None
+    return prices
+
+def get_usd_jpy_conversion_rate():
+    try:
+        conversion_rate = yf.Ticker("JPY=X").history(period="1d")['Close'].iloc[-1]
+        return conversion_rate
+    except Exception as e:
+        print(f"Error fetching USD/JPY conversion rate: {e}")
+        return None
+
+def display_and_confirm_orders(tickers, action, account_value):
+    prices = fetch_realtime_prices([str(ticker) for ticker in tickers])
+    usd_jpy_rate = get_usd_jpy_conversion_rate()
+
+    if usd_jpy_rate is None:
+        print("Failed to retrieve USD/JPY conversion rate. Aborting order placement.")
+        return
+
+    print(f"USD/JPY Conversion Rate: {usd_jpy_rate}")
+    num_tickers = len(tickers)
+    dollar_amount_per_ticker = account_value / num_tickers
+    yen_amount_per_ticker = dollar_amount_per_ticker * usd_jpy_rate
+
+    shares_per_ticker = {}
+    for ticker in tickers:
+        price = prices.get(str(ticker))
+        if price is not None and price > 0:
+            # Calculate shares and round down to the nearest 100
+            shares = int((yen_amount_per_ticker // price) // 100) * 100
+            if shares > 0:
+                shares_per_ticker[str(ticker)] = shares
+            else:
+                print(f"Skipping {ticker} due to insufficient funds to buy a lot of 100 shares.")
+        else:
+            print(f"Skipping {ticker} due to missing or invalid price data.")
+
+    if not shares_per_ticker:
+        print("No valid shares to place orders. Aborting.")
+        return
+
+    df = pd.DataFrame({
+        'Ticker': [str(ticker) for ticker in shares_per_ticker.keys()],
+        'Price': [prices.get(str(ticker)) for ticker in shares_per_ticker.keys()],
+        'Shares': [shares_per_ticker.get(str(ticker)) for ticker in shares_per_ticker.keys()],
+        'Dollar Value': [shares_per_ticker[str(ticker)] * prices.get(str(ticker), 0) / usd_jpy_rate for ticker in shares_per_ticker.keys()]
+    })
+
     print(f"Proposed {action} orders:")
-    df = pd.DataFrame(tickers, columns=['Ticker'])
-    df['Shares'] = 100  # Fixed 100 shares for each order
     print(df)
 
     confirm = input(f"Do you want to place these {action} orders? (yes/no): ").strip().lower()
     if confirm == 'yes':
-        place_fixed_share_orders(tickers, action)
+        place_orders_by_dollar_value(tickers, shares_per_ticker, action)
     else:
         print(f"{action.capitalize()} orders have been canceled.")
+
+def place_orders_by_dollar_value(tickers, shares_per_ticker, action):
+    for ticker, shares in shares_per_ticker.items():
+        contract = Stock(symbol=str(ticker), exchange='TSEJ', currency='JPY')
+        try:
+            ib.qualifyContracts(contract)
+            print(f"Contract qualified for {ticker} on exchange TSEJ.")
+        except Exception as e:
+            print(f"Failed to qualify contract for {ticker}. Error: {e}")
+            continue
+
+        if shares > 0:
+            try:
+                order = MarketOrder(action, shares)
+                trade = ib.placeOrder(contract, order)
+                print(f"Placing {action} order for {shares} shares of {ticker}. Trade ID: {trade.order.orderId}")
+            except Exception as e:
+                print(f"Failed to place {action} order for {ticker}. Error: {e}")
 
 def display_positions_as_dataframe(positions):
     """
@@ -146,11 +222,11 @@ def display_and_confirm_positions():
 
 if __name__ == "__main__":
     try:
-        if not ib.isConnected():
-            print(Fore.RED + "Failed to connect to Interactive Brokers. Please check your connection settings.")
+        # Check if connected to IB
+        if not ib.isConnected:
+            print("Failed to connect to Interactive Brokers. Please check your connection settings.")
             exit()
-
-        # Display positions, confirm and close Japanese positions
+        # Display positions, confirm, and close Japanese positions
         display_and_confirm_positions()
 
         # Step 1: Fetch the total available cash value in the account
@@ -164,15 +240,20 @@ if __name__ == "__main__":
         # Step 3: Confirm and place long orders
         if longs:
             print(f"Placing long orders for tickers: {longs}")
-            display_and_confirm_orders(longs, 'BUY')
+            # Allocate half of the available cash for long positions
+            long_cash = total_cash / 2
+            display_and_confirm_orders(longs, 'BUY', long_cash)
 
         # Step 4: Confirm and place short orders
         if shorts:
             print(f"Placing short orders for tickers: {shorts}")
-            display_and_confirm_orders(shorts, 'SELL')
+            # Allocate the remaining half of the available cash for short positions
+            short_cash = total_cash / 2
+            display_and_confirm_orders(shorts, 'SELL', short_cash)
 
     except Exception as e:
-        print(Fore.RED + f"An error occurred: {e}")
-    
+        print(f"An error occurred: {e}")
+
     finally:
+        # Disconnect from IB
         ib.disconnect()
